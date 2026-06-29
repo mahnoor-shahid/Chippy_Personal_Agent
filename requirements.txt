@@ -1,0 +1,19 @@
+# --- MCP server core ---
+mcp[cli]>=1.2.0          # Model Context Protocol SDK (FastMCP + `mcp dev` inspector)
+feedparser>=6.0.11       # RSS/Atom parsing for the AI-news sources
+ddgs>=6.0.0              # DuckDuckGo web search (web_search tool, no key)
+lxml>=5.0                # HTML parsing for the newsletter source
+youtube-transcript-api>=1.0  # free YouTube transcripts (opinion/LinkedIn posts)
+httpx>=0.27.0            # async HTTP (used by sources / future tools)
+
+# --- agent front-end (added as we build it) ---
+fastapi>=0.110.0         # Twilio inbound webhook
+uvicorn[standard]>=0.29  # ASGI server for the webhook
+twilio>=9.0.0            # WhatsApp send (Twilio API)
+apscheduler>=3.10.0      # 7am daily cron
+sqlalchemy>=2.0          # conversation storage / memory (SQLite -> Postgres)
+python-dotenv>=1.0.1     # load .env
+
+# --- LLM brain ---
+openai>=1.40.0           # used for OpenAI AND OpenRouter (default) AND Ollama
+# anthropic>=0.40.0      # optional: only if LLM_PROVIDER=anthropic
