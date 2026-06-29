@@ -27,6 +27,15 @@ WARN_SUFFIX = (
     "Reply *SUBSCRIBE* to upgrade._"
 )
 
+# Free "how many left?" check — these words trigger a quota reply that does NOT
+# count against the limit and never calls the LLM.
+STATUS_KEYWORDS = {"status", "left", "quota", "remaining", "/status"}
+
+STATUS_MESSAGE = (
+    "🌰 You've got *{remaining}* of {limit} messages left today! "
+    "Resets at midnight. 🐿️"
+)
+
 
 def _day_start_utc() -> datetime:
     try:
@@ -50,3 +59,13 @@ def check(conversation_id: str) -> dict:
 
     remaining = DAILY_LIMIT - (used + 1)
     return {"allowed": True, "remaining": remaining, "warn": remaining <= WARN_AT_REMAINING}
+
+
+def remaining_today(conversation_id: str) -> int:
+    """How many messages the user has left today (without consuming one)."""
+    used = storage.count_user_messages_since(conversation_id, _day_start_utc())
+    return max(0, DAILY_LIMIT - used)
+
+
+def is_status_request(body: str) -> bool:
+    return body.strip().lower() in STATUS_KEYWORDS

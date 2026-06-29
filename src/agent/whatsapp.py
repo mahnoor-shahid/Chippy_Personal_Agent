@@ -65,7 +65,21 @@ def send_whatsapp(text: str, to: str | None = None) -> None:
 
 
 async def _handle_message(body: str, sender: str) -> None:
-    from .limits import LIMIT_REACHED_MESSAGE, WARN_SUFFIX, DAILY_LIMIT, check
+    from .limits import (
+        DAILY_LIMIT,
+        LIMIT_REACHED_MESSAGE,
+        STATUS_MESSAGE,
+        WARN_SUFFIX,
+        check,
+        is_status_request,
+        remaining_today,
+    )
+
+    # Free quota check — doesn't count, doesn't call the LLM.
+    if is_status_request(body):
+        left = remaining_today(sender)
+        send_whatsapp(STATUS_MESSAGE.format(remaining=left, limit=DAILY_LIMIT), to=sender)
+        return
 
     # Daily message cap (per user).
     status = check(sender)
