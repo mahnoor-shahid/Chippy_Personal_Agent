@@ -29,7 +29,9 @@ load_dotenv()
 ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
 AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
 FROM_NUMBER = os.getenv("TWILIO_WHATSAPP_FROM", "").strip()
-OWNER = os.getenv("MY_WHATSAPP_TO", "").strip()  # only this number may use the bot
+# Allowlist of WhatsApp numbers that may use Chippy (comma-separated). Scheduled
+# briefings/posts are broadcast to all of them; replies go to the sender.
+OWNERS = [n.strip() for n in os.getenv("MY_WHATSAPP_TO", "").split(",") if n.strip()]
 
 # Validate Twilio's request signature (prevents spoofed webhooks). Off by default
 # so first-time ngrok testing is frictionless; turn on once it works.
@@ -53,11 +55,13 @@ def send_whatsapp(text: str, to: str | None = None) -> None:
     from .wa_format import split_message, to_whatsapp
 
     client = _twilio_client()
-    to = to or OWNER
-    if not to:
+    recipients = [to] if to else OWNERS  # explicit reply, or broadcast to all
+    if not recipients:
         raise RuntimeError("No recipient: set MY_WHATSAPP_TO in .env or pass `to`.")
-    for part in split_message(to_whatsapp(text), WHATSAPP_MAX_LEN):
-        client.messages.create(from_=FROM_NUMBER, to=to, body=part)
+    parts = split_message(to_whatsapp(text), WHATSAPP_MAX_LEN)
+    for recipient in recipients:
+        for part in parts:
+            client.messages.create(from_=FROM_NUMBER, to=recipient, body=part)
 
 
 async def _handle_message(body: str, sender: str) -> None:
@@ -97,7 +101,7 @@ def _signature_ok(request: Request, form: dict) -> bool:
 
 @app.get("/")
 def health() -> dict:
-    return {"status": "ok", "owner_set": bool(OWNER), "signature_validation": VALIDATE}
+    return {"status": "ok", "allowed_numbers": len(OWNERS), "signature_validation": VALIDATE}
 
 
 @app.post("/whatsapp")
@@ -110,8 +114,8 @@ async def whatsapp_webhook(request: Request, background: BackgroundTasks) -> Res
     sender = (form.get("From") or "").strip()
     body = (form.get("Body") or "").strip()
 
-    # Personal agent: silently ignore anyone who isn't the owner.
-    if OWNER and sender != OWNER:
+    # Personal agent: silently ignore anyone not on the allowlist.
+    if OWNERS and sender not in OWNERS:
         return Response(status_code=204)
 
     if body:
