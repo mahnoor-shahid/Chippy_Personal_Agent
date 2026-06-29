@@ -12,7 +12,7 @@
 [![status](https://img.shields.io/badge/status-live%20🌰-success)]()
 
 *Chippy texts you the news, watches the markets, remembers your stuff,*
-*sets your reminders, and even drafts your posts — all with a cheeky squirrel grin.* 🌰
+*sets your reminders, and even drafts your posts — all with a cheeky squirrel grin.* 🌰 
 
 </div>
 
