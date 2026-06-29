@@ -1,144 +1,146 @@
-# Personal Agent
+<div align="center">
 
-A modular **MCP server** of personal-automation tools, plus a small **agent** that
-drives those tools from WhatsApp and on a schedule.
+# 🐿️ Chippy
 
-## The big idea
+### *Your friendly next-door AI agent — living in your WhatsApp*
 
-The MCP server is the reusable core. It is consumed by two independent front-ends:
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Built with MCP](https://img.shields.io/badge/Built%20with-MCP-7C3AED)](https://modelcontextprotocol.io/)
+[![LLM via OpenRouter](https://img.shields.io/badge/LLM-OpenRouter-4F46E5)](https://openrouter.ai/)
+[![WhatsApp](https://img.shields.io/badge/Chat-WhatsApp-25D366?logo=whatsapp&logoColor=white)](https://www.twilio.com/whatsapp)
+[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![status](https://img.shields.io/badge/status-live%20🌰-success)]()
+
+*Chippy texts you the news, watches the markets, remembers your stuff,*
+*sets your reminders, and even drafts your posts — all with a cheeky squirrel grin.* 🌰
+
+</div>
+
+---
+
+## 🌰 Meet Chippy
+
+Chippy is a **playful, caring little squirrel** who also happens to be a genuinely
+capable personal assistant. He's not a faceless bot — he checks in on you, gets
+excited about the markets, cracks the odd acorn joke, and gets real work done.
+
+He lives in your **WhatsApp**, so there's no app to open — you just text a friend.
+
+> *"Buddy!! 🌰 Do you know what's going on in the world today?!"*
+
+## ✨ What Chippy can do
+
+| | Capability |
+|---|---|
+| 📰 | **Daily AI newsletters** — summarises the latest issues into highlights |
+| 🌍 | **World news** — top global headlines (Deutsche Welle) |
+| 📈 | **PSX market summary** — KSE-100, sectors, top gainers/losers, most active |
+| 🔎 | **Web search** — anything current or factual (DuckDuckGo, no key) |
+| 🌦️ | **Weather** — current + forecast for any city (Open-Meteo) |
+| ⏰ | **Reminders & to-dos** — *"remind me to call the bank at 3pm"* |
+| 🧠 | **Long-term memory** — remembers facts you tell him, and your whole chat |
+| 🎬 | **Video opinions** — fetches a channel's newest video + transcript |
+| ✍️ | **LinkedIn drafts** — writes ready-to-post opinion pieces in his voice |
+
+### ⏰ And he runs on a schedule (so you don't have to ask)
+
+- **08:00** — Morning briefing: 🌍 world news + 📈 PSX market summary
+- **13:00** — ✍️ Chippy's Opinion Piece (from a news channel's latest video)
+- **16:00** — ✍️ Chippy's Opinion Piece (from a markets channel's latest video)
+
+## 🧠 How Chippy thinks
+
+The heart is a **modular MCP server** — a reusable toolbox. The same toolbox can be
+driven by Chippy's own brain (for WhatsApp + scheduling) *or* plugged into ChatGPT.
 
 ```
-                     ┌──────────────────────────┐
-                     │   MCP Server (modular)    │
-                     │   - get_ai_news()         │
-                     │   - (later) draft_post()  │
-                     └────────────┬──────────────┘
-                                  │  MCP protocol
-              ┌───────────────────┴────────────────────┐
-              │                                         │
-   ┌──────────▼───────────┐               ┌─────────────▼────────────┐
-   │   agent/  (our app)  │               │   ChatGPT (Apps SDK)     │
-   │   LLM brain          │               │   manual use, optional   │
-   │   + Twilio WhatsApp  │               │   (for learning the SDK) │
-   │   + 7am scheduler    │               └──────────────────────────┘
-   └──────────────────────┘
+                       ┌─────────────────────────────┐
+                       │   MCP Server (12 tools)      │
+                       │   news · markets · weather   │
+                       │   reminders · memory · video │
+                       └──────────────┬──────────────┘
+                                      │  MCP protocol
+                 ┌────────────────────┴────────────────────┐
+                 │                                          │
+      ┌──────────▼───────────┐                ┌─────────────▼────────────┐
+      │   Chippy's brain      │                │   ChatGPT (Apps SDK)     │
+      │   LLM + persona       │                │   optional / manual      │
+      │   + WhatsApp          │                └──────────────────────────┘
+      │   + scheduler         │
+      │   + memory (SQLite)   │
+      └──────────────────────┘
 ```
 
-> **Why two front-ends?** ChatGPT's Apps SDK lets your tools appear *inside the
-> ChatGPT app for manual use* — it can't be triggered by WhatsApp or run on a 7am
-> cron. So automation runs on our own `agent/`, which reuses the exact same MCP
-> server. You still learn the Apps SDK by connecting the same server to ChatGPT.
+**Adding a new skill = one file** in `tools/` + one line in `server.py`. That's the
+whole point — Chippy grows by dropping in modules.
 
-## Layout
+## 🛠️ Tech stack
 
-```
-src/
-  mcp_server/
-    server.py          # FastMCP app; registers all tools
-    config.py          # settings from env
-    tools/
-      ai_news.py       # get_ai_news tool  (register pattern)
-    sources/
-      rss.py           # raw news fetching (no LLM here)
-  agent/               # (next) brain + Twilio webhook + scheduler
-```
+- **Python 3.12** · **FastMCP** (Model Context Protocol)
+- **OpenRouter** for LLMs — free Nemotron for chat, `gpt-oss-120b` for scheduled jobs
+  (provider-agnostic: also OpenAI, Anthropic, or local **Ollama**)
+- **FastAPI** webhook · **Twilio** WhatsApp · **APScheduler** cron
+- **SQLAlchemy** + SQLite (→ Postgres-ready) for memory & reminders
+- Deployed on a **VPS** with **systemd** + **Caddy** (auto-HTTPS)
 
-Each tool module exposes `register(mcp)` so adding a feature = drop a file in
-`tools/` and add one import line. That's the modularity.
-
-## Setup
+## 🚀 Quickstart (local)
 
 ```bash
+git clone https://github.com/<you>/chippy.git
+cd chippy
 python -m venv .venv
-.venv\Scripts\activate          # Windows  (use: source .venv/bin/activate on *nix)
+.venv\Scripts\activate          # Windows  ·  source .venv/bin/activate on *nix
 pip install -r requirements.txt
-cp .env.example .env            # then edit .env
+cp .env.example .env            # then fill in your keys
 ```
 
-Set `LLM_PROVIDER` (`openrouter` | `anthropic` | `openai` | `ollama`) and paste
-its API key in `.env`. **A valid key is required** for the cloud providers; only
-`ollama` (local open-source models) needs no key.
-
-## Run the agent
-
-```powershell
-python -m src.agent "What's new in AI in the last 24 hours?"
-python -m src.agent            # default morning-digest prompt
-```
-
-## WhatsApp (Twilio sandbox)
-
-1. In `.env` set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and
-   `MY_WHATSAPP_TO=whatsapp:+<your number>` (the bot only answers this number).
-2. Join the sandbox: from WhatsApp, send `join <your-sandbox-code>` to the
-   Twilio sandbox number (Console → Messaging → Try it out → WhatsApp).
-3. Start the webhook and expose it:
-   ```powershell
-   uvicorn src.agent.whatsapp:app --port 8000
-   ngrok http 8000          # in a second terminal
-   ```
-4. In the sandbox settings, set **"When a message comes in"** to
-   `https://<your-ngrok>.ngrok-free.app/whatsapp` (HTTP **POST**), and save.
-5. Message your bot on WhatsApp. Set `TWILIO_VALIDATE=true` once it works.
-
-## Daily digest scheduler
-
-Pushes the morning digest to WhatsApp at `DIGEST_HOUR` (`TIMEZONE`).
-
-```powershell
-python -m src.agent.scheduler --dry-run   # generate + print once (no Twilio)
-python -m src.agent.scheduler --now       # generate + send once
-python -m src.agent.scheduler             # run forever on the schedule
-```
-
-## Deploying on a VPS
-
-Two long-running processes (run under systemd / pm2 / supervisor):
+Set `LLM_PROVIDER` + its API key in `.env` (only `ollama` needs no key). Then:
 
 ```bash
-uvicorn src.agent.whatsapp:app --host 0.0.0.0 --port 8000   # inbound WhatsApp
-python -m src.agent.scheduler                                # 7am digest
-```
+# Chat with Chippy in your terminal
+python -m src.agent "Hey Chippy! what's new in AI?"
 
-Put the webhook behind HTTPS (Caddy / nginx + Let's Encrypt) and point the
-Twilio webhook at `https://<your-domain>/whatsapp`. Then `TWILIO_VALIDATE=true`.
+# Preview the morning briefing (no WhatsApp needed)
+python -m src.agent.scheduler --dry-run
 
-## Run / test the MCP server
-
-```bash
-pip install -r requirements.txt
-
-# Inspect tools interactively in a browser (MCP Inspector):
+# Inspect the MCP tools in a browser
 mcp dev src/mcp_server/server.py
-
-# Or run it as a stdio server:
-python -m src.mcp_server.server
 ```
 
-## Roadmap
+## 📱 WhatsApp + ⏰ Scheduler
 
-- [x] MCP server skeleton + modular tool registration
-- [x] `get_ai_news` tool (RSS-based, LLM-free)
-- [x] `agent/brain.py` — provider-agnostic MCP client + tool loop (OpenRouter/Anthropic/OpenAI)
-- [x] `agent/whatsapp.py` — Twilio inbound webhook + `send_whatsapp()`
-- [x] `agent/scheduler.py` — daily digest push (cron via APScheduler)
-- [x] Ollama provider — local open-source models, no API key
-- [x] Conversation memory + DB (`storage.py`, SQLite → Postgres-ready)
-- [x] Chippy persona (`agent/persona.py`) — playful **and caring** companion
-- [x] `tools/ai_newsletter.py` — up to 3 AI newsletters (beehiiv), summarized
-- [x] `tools/world_news.py` — global headlines (Deutsche Welle RSS)
-- [x] `tools/psx.py` — Pakistan Stock Exchange snapshot (KSE-100 etc.)
-- [x] Composed 8am morning briefing (AI + world + markets), Europe/Berlin
-- [x] `tools/youtube.py` — latest video + transcript (any language)
-- [x] Daily LinkedIn opinion posts (TLDR @13:00, Stockify @16:00, Europe/Berlin)
-- [x] WhatsApp formatter (`wa_format.py`) — Markdown → clean WhatsApp + smart split
-- [x] Per-user 30/day message cap + subscribe nudge (`limits.py`)
-- [x] `tools/web_search.py` — DuckDuckGo web search (no key)
-- [x] `tools/reminders.py` — per-user reminders / to-dos (DB)
-- [x] `tools/memory_facts.py` — remember/recall durable facts (DB)
-- [x] `tools/weather.py` — current weather + forecast (Open-Meteo, no key)
-- [x] LinkedIn drafting — native Chippy skill (uses web_search/news for material)
-- [ ] Switch WhatsApp from Twilio → Meta Cloud API (cost)
-- [ ] Phase 2 (SaaS): auth + per-user accounts + OpenRouter provisioning keys
-- [ ] (optional) connect same server to ChatGPT via Apps SDK
+```bash
+# Inbound WhatsApp webhook
+uvicorn src.agent.whatsapp:app --host 127.0.0.1 --port 8000
+
+# Scheduled briefing + opinion posts
+python -m src.agent.scheduler
 ```
+
+Point your Twilio WhatsApp webhook at `https://<your-domain>/whatsapp`. In
+production these run as **systemd services** behind **Caddy** for HTTPS. Per-user
+**30 messages/day** limit is built in.
+
+## 🗺️ Roadmap
+
+- [x] MCP server + 12 modular tools
+- [x] Provider-agnostic brain (OpenRouter / OpenAI / Anthropic / Ollama)
+- [x] Chippy persona — playful, caring, market-obsessed 🌰
+- [x] WhatsApp + scheduled briefing & opinion posts
+- [x] Memory + reminders (SQLite → Postgres-ready)
+- [x] Per-user daily message limits
+- [x] Deployed always-on (systemd + Caddy)
+- [ ] Multi-number allowlist
+- [ ] Switch WhatsApp Twilio → Meta Cloud API (cost)
+- [ ] Phase 2 (SaaS): accounts + per-user OpenRouter provisioning keys
+- [ ] Telegram channel
+
+---
+
+<div align="center">
+
+*Made with 🌰 and a lot of tail-wagging.*
+
+**Chippy** — because everyone deserves a friendly agent next door.
+
+</div>
