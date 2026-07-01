@@ -46,8 +46,51 @@ class KV(Base):
     value: Mapped[str] = mapped_column(Text)
 
 
+class Post(Base):
+    """A generated opinion piece we keep so the owner can RESEND it later."""
+
+    __tablename__ = "posts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(32), index=True)  # "tldr" | "stockify"
+    date_key: Mapped[str] = mapped_column(String(10), index=True)  # local YYYY-MM-DD
+    prompt: Mapped[str] = mapped_column(Text)
+    content: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
 _engine = create_engine(DATABASE_URL)
 Base.metadata.create_all(_engine)  # idempotent; fine until we add migrations
+
+
+def save_post(kind: str, date_key: str, prompt: str, content: str) -> None:
+    with Session(_engine) as session:
+        session.add(Post(kind=kind, date_key=date_key, prompt=prompt, content=content))
+        session.commit()
+
+
+def get_post(kind: str, date_key: str | None = None) -> dict | None:
+    """Latest post of `kind` (optionally on a specific local date YYYY-MM-DD)."""
+    stmt = select(Post).where(Post.kind == kind)
+    if date_key:
+        stmt = stmt.where(Post.date_key == date_key)
+    with Session(_engine) as session:
+        row = session.execute(stmt.order_by(Post.id.desc()).limit(1)).scalar_one_or_none()
+        if row is None:
+            return None
+        return {"kind": row.kind, "date_key": row.date_key, "prompt": row.prompt, "content": row.content}
+
+
+def list_posts(limit: int = 15) -> list[dict]:
+    with Session(_engine) as session:
+        rows = (
+            session.execute(select(Post).order_by(Post.id.desc()).limit(limit))
+            .scalars()
+            .all()
+        )
+    return [{"kind": r.kind, "date_key": r.date_key} for r in rows]
 
 
 def kv_get(key: str) -> str | None:

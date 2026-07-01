@@ -26,6 +26,7 @@ import random
 import sys
 from datetime import datetime, timezone
 from functools import partial
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
@@ -231,9 +232,10 @@ async def send_psx(*, send: bool) -> None:
         _broadcast_or_print(label, text, send)
 
 
-async def draft_linkedin(name: str, channel: str, *, send: bool = True) -> None:
+async def draft_linkedin(name: str, channel: str, *, send: bool = True, key: str | None = None) -> None:
     """Draft + broadcast the opinion post. Alerts only the owner on any failure —
-    including if the latest video is NOT new since the last post (no duplicates)."""
+    including if the latest video is NOT new since the last post (no duplicates).
+    On a real send, the post (prompt + text) is saved so the owner can RESEND it."""
     from . import storage
     from src.mcp_server.sources.youtube import latest_video_transcript
 
@@ -260,8 +262,8 @@ async def draft_linkedin(name: str, channel: str, *, send: bool = True) -> None:
         return
 
     # Only post if this is a NEW video (Stockify especially may not upload daily).
-    key = f"last_video:{channel}"
-    last = await asyncio.to_thread(storage.kv_get, key)
+    vid_key = f"last_video:{channel}"
+    last = await asyncio.to_thread(storage.kv_get, vid_key)
     if vid == last:
         _alert_owner(
             label,
@@ -271,18 +273,19 @@ async def draft_linkedin(name: str, channel: str, *, send: bool = True) -> None:
         )
         return
 
+    prompt = _linkedin_prompt(name, channel)
     text = await _generate_or_alert(
-        label,
-        lambda: run_agent(_linkedin_prompt(name, channel), model=SCHEDULER_MODEL),
-        send,
-        validate=_valid_linkedin,
+        label, lambda: run_agent(prompt, model=SCHEDULER_MODEL), send, validate=_valid_linkedin
     )
     if text is None:
         return
 
     _broadcast_or_print(label, text, send)
     if send:
-        await asyncio.to_thread(storage.kv_set, key, vid)  # remember we posted this one
+        await asyncio.to_thread(storage.kv_set, vid_key, vid)  # remember we posted this video
+        if key:  # store the opinion piece so the owner can RESEND it later
+            date_key = datetime.now(ZoneInfo(TIMEZONE)).strftime("%Y-%m-%d")
+            await asyncio.to_thread(storage.save_post, key, date_key, prompt, text)
 
 
 async def run_briefing(*, send: bool) -> None:
@@ -344,7 +347,7 @@ async def _serve() -> None:
     )
     for j in LINKEDIN_JOBS:
         sch.add_job(
-            partial(draft_linkedin, j["name"], j["channel"], send=True),
+            partial(draft_linkedin, j["name"], j["channel"], send=True, key=j["key"]),
             CronTrigger(hour=j["hour"], minute=0, timezone=TIMEZONE),
             id=f"linkedin_{j['key']}",
             misfire_grace_time=3600,

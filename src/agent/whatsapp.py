@@ -99,6 +99,56 @@ def _broadcast_to_users(text: str) -> int:
     return len(USERS)
 
 
+def _send_to_target(target: str, message: str) -> str:
+    """Send `message` to @all (users) or @<number>. Returns a status line for the owner."""
+    if target.lower() == "all":
+        return f"📣 Sent to {_broadcast_to_users(message)} user(s). 🌰"
+    num = _normalize_number(target)
+    if num in USERS:
+        send_whatsapp(message, to=num)
+        return f"✅ Sent to {num.replace('whatsapp:', '')}. 🌰"
+    return f"🌰 {target} isn't one of your users. Try @all or @<a user's number>."
+
+
+# Owner command:  RESEND <type> [DD.MM.YYYY] @<target>
+_RESEND_CMD = re.compile(r"^RESEND\s+(\w+)(?:\s+(\d{1,2}\.\d{1,2}\.\d{4}))?\s+@(\S+)\s*$")
+
+
+def _parse_ddmmyyyy(s: str) -> str | None:
+    from datetime import date
+
+    m = re.match(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})$", s.strip())
+    if not m:
+        return None
+    d, mo, y = map(int, m.groups())
+    try:
+        return date(y, mo, d).isoformat()
+    except ValueError:
+        return None
+
+
+def _handle_resend(kind: str, date_str: str | None, target: str) -> str:
+    date_key = None
+    if date_str:
+        date_key = _parse_ddmmyyyy(date_str)
+        if not date_key:
+            return f"🌰 I couldn't read the date '{date_str}'. Use DD.MM.YYYY."
+    post = storage.get_post(kind.lower(), date_key)
+    if not post:
+        when = f"for {date_str}" if date_str else "yet"
+        return f"🌰 No *{kind}* post found {when}. Send POSTS to see what's saved."
+    status = _send_to_target(target, post["content"])
+    return f"♻️ Resent the *{kind}* post from {post['date_key']}.\n{status}"
+
+
+def _list_posts_text() -> str:
+    posts = storage.list_posts(limit=15)
+    if not posts:
+        return "🌰 No saved opinion pieces yet."
+    lines = "\n".join(f"• {p['kind']} — {p['date_key']}" for p in posts)
+    return f"🌰 *Saved opinion pieces:*\n{lines}\n\nResend:  RESEND <type> <DD.MM.YYYY> @all"
+
+
 async def _handle_message(body: str, sender: str) -> None:
     from .limits import (
         DAILY_LIMIT,
@@ -116,21 +166,14 @@ async def _handle_message(body: str, sender: str) -> None:
     if is_owner:
         m = _SEND_CMD.match(body)
         if m:
-            target, message = m.group(1), m.group(2)
-            if target.lower() == "all":
-                count = _broadcast_to_users(message)
-                send_whatsapp(f"📣 Broadcast sent to {count} user(s). 🌰", to=sender)
-            else:
-                num = _normalize_number(target)
-                if num in USERS:
-                    send_whatsapp(message, to=num)
-                    send_whatsapp(f"✅ Sent to {num.replace('whatsapp:', '')}. 🌰", to=sender)
-                else:
-                    send_whatsapp(
-                        f'🌰 {target} isn\'t one of your users. Try `SEND @all "..."` '
-                        f'or `SEND @<a user\'s number> "..."`.',
-                        to=sender,
-                    )
+            send_whatsapp(_send_to_target(m.group(1), m.group(2)), to=sender)
+            return
+        r = _RESEND_CMD.match(body)
+        if r:
+            send_whatsapp(_handle_resend(r.group(1), r.group(2), r.group(3)), to=sender)
+            return
+        if body.strip().upper() == "POSTS":
+            send_whatsapp(_list_posts_text(), to=sender)
             return
 
     # Free quota check — doesn't count, doesn't call the LLM.
