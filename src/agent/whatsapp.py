@@ -39,6 +39,18 @@ SNARKY_WELCOME = [
     "You GHOSTED me for {h}h?! 😤 …okay fine, I forgive you (I always do). What's up, buddy? 🌰💛",
 ]
 
+# A proactive message only reaches someone whose 24h WhatsApp window is still open.
+WINDOW_HOURS = float(os.getenv("SESSION_WINDOW_HOURS", "23.5"))
+
+
+def is_window_open(number: str) -> bool:
+    """True if `number` messaged within the window, so a proactive message will
+    actually be delivered (not wasted on a closed session)."""
+    last = storage.last_user_message_time(number)
+    if last is None:
+        return False
+    return (datetime.now(timezone.utc) - last).total_seconds() < WINDOW_HOURS * 3600
+
 ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
 AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
 FROM_NUMBER = os.getenv("TWILIO_WHATSAPP_FROM", "").strip()
@@ -67,13 +79,21 @@ def _twilio_client():
 
 
 def send_whatsapp(text: str, to: str | None = None) -> None:
-    """Clean Markdown -> WhatsApp formatting, then send (split if too long)."""
+    """Clean Markdown -> WhatsApp, then send (split if too long).
+
+    Explicit `to` always sends (it's a reply — the window is open by definition).
+    A broadcast (to=None) only goes to numbers with an OPEN session, so we never
+    waste a message on a closed/asleep one."""
     from .wa_format import split_message, to_whatsapp
 
-    client = _twilio_client()
-    recipients = [to] if to else ALLOWED  # explicit reply, or broadcast to all
+    if to:
+        recipients = [to]
+    else:
+        recipients = [n for n in ALLOWED if is_window_open(n)]
     if not recipients:
-        raise RuntimeError("No recipient: set MY_WHATSAPP_TO in .env or pass `to`.")
+        return  # nobody reachable right now — skip silently, no waste
+
+    client = _twilio_client()
     parts = split_message(to_whatsapp(text), WHATSAPP_MAX_LEN)
     for recipient in recipients:
         for part in parts:
@@ -94,20 +114,30 @@ def _normalize_number(raw: str) -> str:
 
 
 def _broadcast_to_users(text: str) -> int:
-    for user in USERS:
+    open_users = [u for u in USERS if is_window_open(u)]
+    for user in open_users:
         send_whatsapp(text, to=user)
-    return len(USERS)
+    return len(open_users)
 
 
 def _send_to_target(target: str, message: str) -> str:
-    """Send `message` to @all (users) or @<number>. Returns a status line for the owner."""
+    """Send `message` to @all (users) or @<number>. Skips asleep sessions so no
+    message is wasted. Returns a status line for the owner."""
     if target.lower() == "all":
-        return f"📣 Sent to {_broadcast_to_users(message)} user(s). 🌰"
+        sent = _broadcast_to_users(message)
+        skipped = len(USERS) - sent
+        note = f" ({skipped} asleep 💤 — waiting on them)" if skipped else ""
+        return f"📣 Sent to {sent} of {len(USERS)} user(s){note}. 🌰"
     num = _normalize_number(target)
-    if num in USERS:
-        send_whatsapp(message, to=num)
-        return f"✅ Sent to {num.replace('whatsapp:', '')}. 🌰"
-    return f"🌰 {target} isn't one of your users. Try @all or @<a user's number>."
+    if num not in USERS:
+        return f"🌰 {target} isn't one of your users. Try @all or @<a user's number>."
+    if not is_window_open(num):
+        return (
+            f"💤 {target}'s session is closed — nothing sent (no waste). "
+            f"They need to message Chippy first to open it."
+        )
+    send_whatsapp(message, to=num)
+    return f"✅ Sent to {num.replace('whatsapp:', '')}. 🌰"
 
 
 # Owner command:  RESEND <type> [DD.MM.YYYY] @<target>
