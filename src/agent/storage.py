@@ -37,8 +37,33 @@ class Message(Base):
     )
 
 
+class KV(Base):
+    """Tiny key-value store (e.g. the last video id we posted per channel)."""
+
+    __tablename__ = "kv"
+
+    key: Mapped[str] = mapped_column(String(255), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+
+
 _engine = create_engine(DATABASE_URL)
 Base.metadata.create_all(_engine)  # idempotent; fine until we add migrations
+
+
+def kv_get(key: str) -> str | None:
+    with Session(_engine) as session:
+        row = session.get(KV, key)
+        return row.value if row else None
+
+
+def kv_set(key: str, value: str) -> None:
+    with Session(_engine) as session:
+        row = session.get(KV, key)
+        if row:
+            row.value = value
+        else:
+            session.add(KV(key=key, value=value))
+        session.commit()
 
 
 def save_message(conversation_id: str, role: str, content: str) -> None:
@@ -59,6 +84,22 @@ def count_user_messages_since(conversation_id: str, since: datetime) -> int:
                 Message.created_at >= since,
             )
         ).scalar_one()
+
+
+def last_user_message_time(conversation_id: str) -> datetime | None:
+    """When this user last messaged (for keep-alive nudges + welcome-back).
+
+    Always returned as a timezone-aware UTC datetime (SQLite hands back naive)."""
+    with Session(_engine) as session:
+        ts = session.execute(
+            select(Message.created_at)
+            .where(Message.conversation_id == conversation_id, Message.role == "user")
+            .order_by(Message.id.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+    if ts is not None and ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return ts
 
 
 def recent_messages(conversation_id: str, limit: int = 8) -> list[dict]:
