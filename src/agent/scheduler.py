@@ -140,7 +140,9 @@ def _stdout_utf8() -> None:
 
 
 def _alert_owner(label: str, reason: str, send: bool) -> None:
-    """On failure, message ONLY the owner — never broadcast broken content to users."""
+    """On failure, message ONLY the owner — never broadcast broken content to users.
+    But only if the owner's OWN session is open: if the owner's window is closed the
+    alert can't be delivered, so we stay silent (just log it) rather than waste it."""
     text = (
         f"⚠️ Chippy couldn't send the *{label}* today.\n\n"
         f"Reason: {reason}\n\n"
@@ -148,13 +150,14 @@ def _alert_owner(label: str, reason: str, send: bool) -> None:
         f'reply:  SEND @all "your message"'
     )
     if send:
-        from .whatsapp import OWNER, send_whatsapp
+        from .whatsapp import OWNER, is_window_open, send_whatsapp
 
-        if OWNER:
+        if OWNER and is_window_open(OWNER):
             send_whatsapp(text, to=OWNER)
         else:
             _stdout_utf8()
-            print("[OWNER ALERT — no OWNER_NUMBER set]\n" + text, flush=True)
+            why = "no OWNER_NUMBER set" if not OWNER else "owner's session closed — can't deliver"
+            print(f"[OWNER ALERT — {why}]\n{text}", flush=True)
     else:
         _stdout_utf8()
         print(f"\n[OWNER ALERT] {text}\n", flush=True)
@@ -174,6 +177,21 @@ async def _generate_or_alert(label, gen, send, validate=None):
     return text
 
 
+def _anyone_awake(label: str, send: bool) -> bool:
+    """Gate a broadcast job: skip the whole thing (fetch + LLM) if no user's
+    session is open, so we never do expensive work nobody can receive. Dry-runs
+    (send=False) always proceed so they can be tested/printed."""
+    if not send:
+        return True
+    from .whatsapp import any_window_open
+
+    if any_window_open():
+        return True
+    stamp = datetime.now().isoformat(timespec="seconds")
+    print(f"[{stamp}] {label}: skipped — no open WhatsApp sessions (no waste).", flush=True)
+    return False
+
+
 def _broadcast_or_print(label: str, text: str, send: bool) -> None:
     stamp = datetime.now().isoformat(timespec="seconds")
     if send:
@@ -191,6 +209,8 @@ async def send_news(label: str, source: str, feeds, *, send: bool) -> None:
     owner if the fetch/format fails."""
     from src.mcp_server.sources.rss import fetch_news
 
+    if not _anyone_awake(label, send):
+        return
     stamp = datetime.now().isoformat(timespec="seconds")
     print(f"[{stamp}] {label}: fetching {source}...", flush=True)
     try:
@@ -214,6 +234,8 @@ async def send_psx(*, send: bool) -> None:
     from src.mcp_server.tools.psx import fetch_psx_summary
 
     label = "📈 PSX market summary"
+    if not _anyone_awake(label, send):
+        return
     stamp = datetime.now().isoformat(timespec="seconds")
     print(f"[{stamp}] {label}: fetching PSX...", flush=True)
     try:
@@ -240,6 +262,8 @@ async def draft_linkedin(name: str, channel: str, *, send: bool = True, key: str
     from src.mcp_server.sources.youtube import latest_video_transcript
 
     label = f"✍️ {name} Opinion Piece"
+    if not _anyone_awake(label, send):
+        return
     stamp = datetime.now().isoformat(timespec="seconds")
     print(f"[{stamp}] {label}: checking video...", flush=True)
 

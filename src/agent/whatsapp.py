@@ -51,6 +51,13 @@ def is_window_open(number: str) -> bool:
         return False
     return (datetime.now(timezone.utc) - last).total_seconds() < WINDOW_HOURS * 3600
 
+
+def any_window_open(numbers: list[str] | None = None) -> bool:
+    """True if at least one recipient has an OPEN session. Lets the scheduler skip
+    the whole job (fetch + LLM) up front when nobody could receive the broadcast
+    anyway. Defaults to the full allowlist — the same audience send_whatsapp() uses."""
+    return any(is_window_open(n) for n in (ALLOWED if numbers is None else numbers))
+
 ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "").strip()
 AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "").strip()
 FROM_NUMBER = os.getenv("TWILIO_WHATSAPP_FROM", "").strip()
